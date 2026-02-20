@@ -623,6 +623,157 @@ app.get("/leaderboard", async (req, res) => {
     }
 });
 
+app.post("/ai/chat", async (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    try {
+        const { message } = req.body;
+
+        // Fetch all data from DB
+        const users = await usermodel.find({}, 'name username avatar followers Following alltime_rank monthly_rank weekly_rank featured verified create_on');
+        const posts = await postmodel.find({}, 'userId description likes featured posted_on').populate('userId', 'name username');
+        const campaigns = await campaignmodel.find({}, 'userId title description progress status peopleNeeded amountRaised contributionTypes created_on members').populate('userId', 'name username');
+        const leaderboard = await postmodel.aggregate([
+            { $match: { userId: { $exists: true, $ne: null } } },
+            { $group: { _id: "$userId", totalLikes: { $sum: "$likes" } } },
+            { $sort: { totalLikes: -1 } },
+            { $limit: 10 },
+            { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
+            { $unwind: "$user" },
+            { $project: { totalLikes: 1, "user.name": 1, "user.username": 1 } }
+        ]);
+
+        // Keep context small - no image/video URLs
+        const dbContext = JSON.stringify({ users, posts, campaigns, leaderboard });
+        console.log("DB context size:", dbContext.length, "chars");
+
+        const systemPrompt = `You are a helpful assistant for an eco-action social app. 
+Users post their eco-friendly actions (planting trees, cleaning beaches etc), join campaigns, and earn likes.
+Here is the current live database data:
+${dbContext}
+Answer user questions based on this data. Be helpful, friendly and concise.
+Do not reveal any sensitive information like passwords or emails.`;
+
+        // Try API 1 — Claude
+        try {
+            const response = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-api-key": process.env.ClaudeAPI,
+                    "anthropic-version": "2023-06-01"
+                },
+                body: JSON.stringify({
+                    model: "claude-haiku-4-5-20251001",
+                    max_tokens: 1024,
+                    system: systemPrompt,
+                    messages: [{ role: "user", content: message }]
+                })
+            });
+
+            const data = await response.json();
+            console.log("Claude response:", JSON.stringify(data).slice(0, 200));
+
+            if (data.error) throw new Error("Claude error: " + data.error.message);
+
+            return res.json({ success: true, reply: data.content[0].text, usedApi: "claude" });
+
+        } catch (claudeError) {
+            console.log("Claude failed:", claudeError.message);
+
+            // Try API 2 — ChatGPT
+            try {
+                const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${process.env.openaiAPI}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini",
+                        max_tokens: 1024,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: message }
+                        ]
+                    })
+                });
+
+                const data = await response.json();
+                console.log("OpenAI response:", JSON.stringify(data).slice(0, 200));
+
+                if (data.error) throw new Error("OpenAI error: " + data.error.message);
+
+                return res.json({ success: true, reply: data.choices[0].message.content, usedApi: "chatgpt" });
+
+            } catch (openaiError) {
+                console.log("ChatGPT failed:", openaiError.message);
+
+                // Try API 3 — Gemini
+                try {
+                    const response = await fetch(
+                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GeminiAPI}`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                system_instruction: { parts: [{ text: systemPrompt }] },
+                                contents: [{ parts: [{ text: message }] }]
+                            })
+                        }
+                    );
+
+                    const data = await response.json();
+                    console.log("Gemini response:", JSON.stringify(data).slice(0, 200));
+
+                    if (data.error) throw new Error("Gemini error: " + data.error.message);
+
+                    return res.json({ success: true, reply: data.candidates[0].content.parts[0].text, usedApi: "gemini" });
+
+                } catch (geminiError) {
+    console.log("Gemini failed:", geminiError.message);
+
+    // Try API 4 — Groq (free)
+    try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${process.env.GrokAPI}`
+            },
+            body: JSON.stringify({
+                model: "llama-3.3-70b-versatile",
+                max_tokens: 1024,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: message }
+                ]
+            })
+        });
+
+        const data = await response.json();
+        console.log("Groq response:", JSON.stringify(data).slice(0, 200));
+
+        if (data.error) throw new Error("Groq error: " + data.error.message);
+
+        return res.json({ success: true, reply: data.choices[0].message.content, usedApi: "groq" });
+
+    } catch (groqError) {
+        console.log("Groq failed:", groqError.message);
+        throw new Error("All APIs failed. Last: " + groqError.message);
+    }
+}
+            }
+        }
+
+    } catch (error) {
+        console.log("Final error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 const paymentRoutes = require("./routes/payment");
 
 app.use("/payment", paymentRoutes);

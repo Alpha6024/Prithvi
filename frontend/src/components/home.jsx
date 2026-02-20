@@ -198,6 +198,12 @@ const handleLike = async (postId) => {
           ))
         )}
       </div>
+      <button
+    onClick={() => navigate("/acc/bot")}
+    className="fixed bottom-24 right-4 w-14 h-14 bg-green-500 rounded-full flex items-center justify-center shadow-xl z-20 hover:bg-green-600 transition-colors"
+>
+    <span className="text-2xl">🤖</span>
+</button>
 
       {/* Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 max-w-md mx-auto">

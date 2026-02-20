@@ -15,6 +15,7 @@ import Post from "./components/post";
 import Profile from "./components/profile";
 import Newacc from "./components/newacc"
 import CreateAcc from "./components/createacc";
+import Bot from "./components/bot";
 
 const router = createBrowserRouter([
   {
@@ -52,6 +53,10 @@ const router = createBrowserRouter([
   {
     path:"/acc/home/profile",
     element:<Profile/>
+  },
+  {
+    path:"/acc/bot",
+    element:<Bot/>
   }
 ]);
 
