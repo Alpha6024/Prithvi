@@ -1,13 +1,16 @@
-import { ArrowLeft, Camera, CheckCircle, X, Image } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle, X, Image, Video } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function CreatePost() {
     const navigate = useNavigate();
     const fileRef = useRef(null);
+    const videoRef = useRef(null);
 
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
+    const [videoFile, setVideoFile] = useState(null);
+    const [videoPreview, setVideoPreview] = useState(null);
     const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -20,17 +23,31 @@ export default function CreatePost() {
         }
     };
 
+    const handleVideoChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setVideoFile(file);
+            setVideoPreview(URL.createObjectURL(file));
+        }
+    };
+
     const removeImage = () => {
         setImageFile(null);
         setImagePreview(null);
         fileRef.current.value = '';
     };
 
+    const removeVideo = () => {
+        setVideoFile(null);
+        setVideoPreview(null);
+        videoRef.current.value = '';
+    };
+
     const handleSubmit = async () => {
         setError('');
 
-        if (!imageFile && !description.trim()) {
-            return setError('Please add an image or description');
+        if (!imageFile && !videoFile && !description.trim()) {
+            return setError('Please add an image, video, or description');
         }
 
         setLoading(true);
@@ -38,6 +55,7 @@ export default function CreatePost() {
         try {
             const formData = new FormData();
             if (imageFile) formData.append('image', imageFile);
+            if (videoFile) formData.append('video', videoFile);
             if (description) formData.append('description', description);
 
             const res = await fetch('http://localhost:3000/post/create', {
@@ -114,6 +132,47 @@ export default function CreatePost() {
                         accept="image/*"
                         className="hidden"
                         onChange={handleImageChange}
+                    />
+                </div>
+
+                {/* VIDEO UPLOAD */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Video className="w-5 h-5 text-blue-600" />
+                        <span className="font-semibold text-sm">Add Video</span>
+                    </div>
+
+                    {videoPreview ? (
+                        <div className="relative rounded-xl overflow-hidden">
+                            <video
+                                src={videoPreview}
+                                controls
+                                className="w-full h-48 object-cover rounded-xl"
+                            />
+                            <button
+                                onClick={removeVideo}
+                                className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full p-1"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div
+                            onClick={() => videoRef.current.click()}
+                            className="bg-gray-100 rounded-xl h-40 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors border-2 border-dashed border-gray-300"
+                        >
+                            <Video className="w-10 h-10 text-gray-400 mb-2" />
+                            <p className="text-sm text-gray-500 font-medium">Tap to upload video</p>
+                            <p className="text-xs text-gray-400 mt-1">MP4, MOV supported</p>
+                        </div>
+                    )}
+
+                    <input
+                        ref={videoRef}
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={handleVideoChange}
                     />
                 </div>
 

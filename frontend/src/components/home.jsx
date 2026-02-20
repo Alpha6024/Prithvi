@@ -152,12 +152,14 @@ const handleLike = async (postId) => {
                 )}
               </div>
 
+             
               {/* Post Image */}
-              {post.image ? (
-                <img src={post.image} alt="Post" className="w-full h-64 object-cover" />
-              ) : post.Video ? (
-                <video src={post.Video} className="w-full h-64 object-cover" controls />
-              ) : null}
+{post.image && (
+    <img src={post.image} alt="Post" className="w-full h-64 object-cover" />
+)}
+{post.Video && (
+    <video src={post.Video} className="w-full h-64 object-cover mt-1" controls />
+)}
 
               {/* Caption */}
               {post.description && (

@@ -229,16 +229,15 @@ app.post("/post/create", upload.fields([{ name: "image", maxCount: 1 }, { name: 
 
         let imageUrl = null;
         let videoUrl = null;
+if (req.files?.image) {
+    const imageResult = await uploadbuffer(req.files.image[0].buffer, req.files.image[0].mimetype);
+    imageUrl = imageResult.url;
+}
 
-        if (req.files?.image) {
-            const imageResult = await uploadbuffer(req.files.image[0].buffer);
-            imageUrl = imageResult.url;
-        }
-
-        if (req.files?.video) {
-            const videoResult = await uploadbuffer(req.files.video[0].buffer);
-            videoUrl = videoResult.url;
-        }
+if (req.files?.video) {
+    const videoResult = await uploadbuffer(req.files.video[0].buffer, req.files.video[0].mimetype);
+    videoUrl = videoResult.url;
+}
 
         // Generate unique numeric id for post
         const postCount = await postmodel.countDocuments();
@@ -282,8 +281,7 @@ app.get("/post/myposts", async (req, res) => {
 app.get("/post/view", async (req, res) => {
     try {
         const posts = await postmodel.find()
-            .populate('userId', 'name username avatar')
-            .select('+likedBy'); // make sure likedBy is included
+            .populate('userId', 'name username avatar');
         res.status(200).json({ success: true, posts });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
