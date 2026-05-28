@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { authFetch, isGuest } from '../auth';
 import GuestBanner from './GuestBanner';
-import { useGuestGuard } from '../hooks/useGuestGuard';
+import { useGuestGuard } from '../hooks/useGuestGuard.jsx';
 
 const API = import.meta.env.VITE_API_URL;
 

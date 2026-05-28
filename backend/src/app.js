@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require("dotenv").config();
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const app = express();
 
 const allowedOrigins = [
@@ -23,7 +23,8 @@ app.use(cors({
     },
     credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // ── JWT helpers ───────────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.PRIVATE_KEY || 'prithvi_secret';
@@ -89,11 +90,12 @@ app.get("/leaderboard/alltime", async (req, res) => {
 });
 
 app.get('/auth/google', (req, res) => {
-    res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.BASE_URL}/auth/google/callback&response_type=code&scope=profile email`);
+    const clientId = encodeURIComponent(process.env.GOOGLE_CLIENT_ID);
+    const redirectUri = encodeURIComponent(`${process.env.BASE_URL}/auth/google/callback`);
+    res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=profile%20email`);
 });
 
-app.get('/auth/google/callback', async (req, res) => {
-    // Google OAuth is now handled by Supabase on the frontend
+app.get('/auth/google/callback', (req, res) => {
     res.redirect(`${process.env.FRONTEND_URL}/acc`);
 });
 
@@ -101,7 +103,7 @@ app.get('/auth/user', authMiddleware, (req, res) => {
     res.json({ success: true, user: req.user });
 });
 
-app.post('/auth/logout', (req, res) => {
+app.post('/auth/logout', authMiddleware, (req, res) => {
     res.json({ success: true, message: 'Logged out' });
 });
 
@@ -109,9 +111,14 @@ app.post('/auth/logout', (req, res) => {
 app.post('/auth/supabase-session', async (req, res) => {
     try {
         const { access_token } = req.body;
-        if (!access_token) return res.status(400).json({ success: false, message: 'No token provided' });
+        if (!access_token || typeof access_token !== 'string') {
+            return res.status(400).json({ success: false, message: 'No token provided' });
+        }
+        // Only call the configured Supabase URL — prevents SSRF
+        const supabaseUrl = process.env.SUPABASE_URL;
+        if (!supabaseUrl) return res.status(500).json({ success: false, message: 'Server misconfigured' });
 
-        const supabaseRes = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, {
+        const supabaseRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
             headers: {
                 Authorization: `Bearer ${access_token}`,
                 apikey: process.env.SUPABASE_ANON_KEY
@@ -395,12 +402,16 @@ app.post("/campaign/create", authMiddleware, upload.single('image'), async (req,
             const result = await uploadbuffer(req.file.buffer);
             imageUrl = result.url;
         }
+        let parsedContributionTypes = [];
+        try { parsedContributionTypes = JSON.parse(contributionTypes || '[]'); } catch { parsedContributionTypes = []; }
+        if (!Array.isArray(parsedContributionTypes)) parsedContributionTypes = [];
+
         const campaign = await campaignmodel.create({
             userId: req.user._id,
             title,
             description,
             image: imageUrl,
-            contributionTypes: JSON.parse(contributionTypes || '[]'),
+            contributionTypes: parsedContributionTypes,
             peopleNeeded: peopleNeeded || 0
         });
         res.status(201).json({ success: true, campaign });
@@ -442,7 +453,7 @@ app.put("/campaign/update/:id", authMiddleware, upload.single('image'), async (r
                 title: title || campaign.title,
                 description: description || campaign.description,
                 image: imageUrl,
-                contributionTypes: contributionTypes ? JSON.parse(contributionTypes) : campaign.contributionTypes,
+                contributionTypes: (() => { try { return contributionTypes ? JSON.parse(contributionTypes) : campaign.contributionTypes; } catch { return campaign.contributionTypes; } })(),
                 peopleNeeded: peopleNeeded || campaign.peopleNeeded,
                 progress: progress !== undefined ? Number(progress) : campaign.progress,
                 status: Number(progress) >= 100 ? 'completed' : 'active'
@@ -977,7 +988,7 @@ app.get("/user/trustscore/:userId", async (req, res) => {
     }
 });
 
-app.get("/admin/users", async (req, res) => {
+app.get("/admin/users", authMiddleware, async (req, res) => {
     try {
         const users = await usermodel.find({}, 'name username email avatar trustScore followers Following create_on');
         res.json({ success: true, users });
@@ -1337,7 +1348,7 @@ app.post("/user/signup", upload.single('avatar'), async (req, res) => {
 });
 
 // Admin flag/unflag a campaign
-app.put("/admin/campaign/flag/:id", async (req, res) => {
+app.put("/admin/campaign/flag/:id", authMiddleware, async (req, res) => {
     try {
         const { flagged, reason } = req.body;
         await campaignmodel.findByIdAndUpdate(req.params.id, { flagged, flagReason: reason || "" });
@@ -1348,7 +1359,7 @@ app.put("/admin/campaign/flag/:id", async (req, res) => {
 });
 
 // Admin remove a campaign
-app.delete("/admin/campaign/remove/:id", async (req, res) => {
+app.delete("/admin/campaign/remove/:id", authMiddleware, async (req, res) => {
     try {
         const campaign = await campaignmodel.findById(req.params.id);
         if (!campaign) return res.status(404).json({ success: false, message: "Campaign not found" });
@@ -1385,47 +1396,6 @@ app.put("/admin/campaign/flag/:id", async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
-    }
-});
-
-// Supabase session sync — verifies Supabase JWT and returns backend JWT
-app.post('/auth/supabase-session', async (req, res) => {
-    try {
-        const { access_token } = req.body;
-        if (!access_token) return res.status(400).json({ success: false, message: 'No token provided' });
-
-        const supabaseRes = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, {
-            headers: {
-                Authorization: `Bearer ${access_token}`,
-                apikey: process.env.SUPABASE_ANON_KEY
-            }
-        });
-
-        const supabaseUser = await supabaseRes.json();
-        if (!supabaseUser.id) return res.status(401).json({ success: false, message: 'Invalid token' });
-
-        let user = await usermodel.findOne({
-            $or: [{ supabase_uid: supabaseUser.id }, { email: supabaseUser.email }]
-        });
-
-        let isNewUser = false;
-        if (!user) {
-            user = await usermodel.create({
-                supabase_uid: supabaseUser.id,
-                email: supabaseUser.email,
-                name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name || '',
-                avatar: supabaseUser.user_metadata?.avatar_url || null,
-                isNewUser: true
-            });
-            isNewUser = true;
-        } else if (!user.supabase_uid) {
-            await usermodel.findByIdAndUpdate(user._id, { supabase_uid: supabaseUser.id });
-        }
-
-        const token = signToken(user);
-        res.json({ success: true, token, isNewUser: user.isNewUser || isNewUser, user });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
     }
 });
 

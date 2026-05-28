@@ -3,7 +3,7 @@ import { Plus, Home, Target, Trophy, User, ArrowLeft, Users, TrendingUp, X, Came
 import { useNavigate } from 'react-router-dom';
 import { authFetch, isGuest } from '../auth';
 import GuestBanner from './GuestBanner';
-import { useGuestGuard } from '../hooks/useGuestGuard';
+import { useGuestGuard } from '../hooks/useGuestGuard.jsx';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -138,6 +138,8 @@ export default function Campaign() {
         setImagePreview(campaign.image);
         setShowForm(true);
     };
+
+    const handleCreateClick = () => guard(() => { resetForm(); setShowForm(true); });
 
     const resetForm = () => {
         setForm({ title: '', description: '', contributionTypes: [], peopleNeeded: '', progress: 0 });
@@ -295,7 +297,7 @@ export default function Campaign() {
                             )}
                         </button>
                         <button
-                            onClick={() => guard(() => { resetForm(); setShowForm(true); })}
+                            onClick={handleCreateClick}
                             className="bg-green-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1"
                         >
                             <Plus className="w-4 h-4" /> Create
@@ -688,21 +690,21 @@ export default function Campaign() {
 
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
                 <div className="max-w-md mx-auto flex items-center justify-around py-2">
-                    <button onClick={() => navigate("/acc/home")} className="flex flex-col items-center gap-0.5 text-gray-500 min-w-[48px] py-1">
+                    <button onClick={() => navigate("/acc/home")} className="flex flex-col items-center gap-0.5 text-gray-500 min-w-12 py-1">
                         <Home className="w-6 h-6" /><span className="text-xs">Home</span>
                     </button>
-                    <button className="flex flex-col items-center gap-0.5 text-green-600 min-w-[48px] py-1">
+                    <button className="flex flex-col items-center gap-0.5 text-green-600 min-w-12 py-1">
                         <Target className="w-6 h-6" fill="currentColor" /><span className="text-xs">Campaign</span>
                     </button>
-                    <button onClick={() => navigate("/acc/home/post")} className="flex flex-col items-center gap-0.5 text-gray-500 min-w-[48px] py-1">
+                    <button onClick={() => navigate("/acc/home/post")} className="flex flex-col items-center gap-0.5 text-gray-500 min-w-12 py-1">
                         <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center -mt-5 shadow-lg">
                             <Plus className="w-6 h-6 text-white" strokeWidth={3} />
                         </div>
                     </button>
-                    <button onClick={() => navigate("/acc/home/leaderboard")} className="flex flex-col items-center gap-0.5 text-gray-500 min-w-[48px] py-1">
+                    <button onClick={() => navigate("/acc/home/leaderboard")} className="flex flex-col items-center gap-0.5 text-gray-500 min-w-12 py-1">
                         <Trophy className="w-6 h-6" /><span className="text-xs">Ranks</span>
                     </button>
-                    <button onClick={() => navigate("/acc/home/profile")} className="flex flex-col items-center gap-0.5 text-gray-500 min-w-[48px] py-1">
+                    <button onClick={() => navigate("/acc/home/profile")} className="flex flex-col items-center gap-0.5 text-gray-500 min-w-12 py-1">
                         <User className="w-6 h-6" /><span className="text-xs">Profile</span>
                     </button>
                 </div>

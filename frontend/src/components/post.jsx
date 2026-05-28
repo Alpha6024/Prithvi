@@ -22,6 +22,9 @@ export default function CreatePost() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const handleImageClick = () => fileRef.current.click();
+    const handleVideoClick = () => videoRef.current.click();
+
     const handleImageChange = (e) => {
         const file = e.target.files[0];
         if (file) { setImageFile(file); setImagePreview(URL.createObjectURL(file)); }
@@ -79,7 +82,7 @@ export default function CreatePost() {
                             </button>
                         </div>
                     ) : (
-                        <div onClick={() => fileRef.current.click()}
+                        <div onClick={handleImageClick}
                             className="bg-gray-100 rounded-xl h-40 flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 border-2 border-dashed border-gray-300">
                             <Image className="w-10 h-10 text-gray-400 mb-2" />
                             <p className="text-sm text-gray-500 font-medium">Tap to upload image</p>
@@ -102,7 +105,7 @@ export default function CreatePost() {
                             </button>
                         </div>
                     ) : (
-                        <div onClick={() => videoRef.current.click()}
+                        <div onClick={handleVideoClick}
                             className="bg-gray-100 rounded-xl h-40 flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 border-2 border-dashed border-gray-300">
                             <Video className="w-10 h-10 text-gray-400 mb-2" />
                             <p className="text-sm text-gray-500 font-medium">Tap to upload video</p>
@@ -115,6 +118,7 @@ export default function CreatePost() {
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
                     <label className="block text-sm font-semibold mb-2">Tell the community what happened!</label>
                     <textarea
+                        aria-label="Describe your eco action"
                         className="w-full border border-gray-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500"
                         rows="4"
                         placeholder="Describe your eco action... planted trees, cleaned a beach, reduced waste?"

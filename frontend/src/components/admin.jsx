@@ -248,6 +248,7 @@ export default function Admin() {
                             <label className="text-xs text-gray-400 uppercase font-semibold mb-1 block">Username</label>
                             <input
                                 type="text"
+                                aria-label="Username"
                                 value={username}
                                 onChange={e => setUsername(e.target.value)}
                                 onKeyDown={e => e.key === "Enter" && handleLogin()}
@@ -259,6 +260,7 @@ export default function Admin() {
                             <label className="text-xs text-gray-400 uppercase font-semibold mb-1 block">Password</label>
                             <input
                                 type="password"
+                                aria-label="Password"
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 onKeyDown={e => e.key === "Enter" && handleLogin()}
@@ -478,7 +480,7 @@ export default function Admin() {
                             <h2 className="font-semibold">All Users ({users.length})</h2>
                             <Eye className="w-4 h-4 text-gray-500" />
                         </div>
-                        <div className="divide-y divide-gray-800 max-h-[600px] overflow-y-auto">
+                        <div className="divide-y divide-gray-800 max-h-150 overflow-y-auto">
                             {users.length === 0 && <p className="text-gray-500 text-sm p-4">No users found.</p>}
                             {users.map(u => (
                                 <div key={u._id} className="flex items-center gap-3 p-4 hover:bg-gray-800 transition">
@@ -511,7 +513,7 @@ export default function Admin() {
                         <div className="p-4 border-b border-gray-800">
                             <h2 className="font-semibold">All Transactions ({transactions.length})</h2>
                         </div>
-                        <div className="divide-y divide-gray-800 max-h-[600px] overflow-y-auto">
+                        <div className="divide-y divide-gray-800 max-h-150 overflow-y-auto">
                             {transactions.length === 0 && <p className="text-gray-500 text-sm p-4">No transactions yet.</p>}
                             {transactions.map(t => (
                                 <div key={t._id} className="flex items-center justify-between p-4 hover:bg-gray-800 transition">
