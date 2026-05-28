@@ -1,9 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { isGuest } from '../auth';
+import { isGuest, getToken } from '../auth';
 
 export default function GuestBanner() {
     const navigate = useNavigate();
-    if (!isGuest()) return null;
+    if (!isGuest() || getToken()) return null;
     return (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between gap-3">
             <p className="text-xs text-amber-700 font-medium">👀 Browsing as guest — read only</p>

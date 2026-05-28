@@ -22,6 +22,7 @@ export default function AuthCallback() {
                 const result = await res.json();
                 if (result.success) {
                     setToken(result.token);
+                    removeGuest();
                     navigate(result.isNewUser ? '/newacc' : '/acc/home');
                 } else {
                     navigate('/acc');

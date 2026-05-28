@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { isGuest } from '../auth';
+import { isGuest, getToken } from '../auth';
 
 export function useGuestGuard() {
     const [showPrompt, setShowPrompt] = useState(false);
     const navigate = useNavigate();
 
     const guard = (action) => {
-        if (isGuest()) { setShowPrompt(true); return; }
+        if (isGuest() && !getToken()) { setShowPrompt(true); return; }
         action();
     };
 
@@ -21,7 +21,7 @@ export function useGuestGuard() {
                     onClick={() => navigate('/acc')}
                     className="w-full bg-green-500 text-white font-semibold py-3 rounded-xl mb-3 active:bg-green-600"
                 >
-                    Sign in with Google
+                    Sign in
                 </button>
                 <button
                     onClick={() => setShowPrompt(false)}
