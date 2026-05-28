@@ -4,6 +4,7 @@ const { usermodel, postmodel, campaignmodel, donationmodel } = require("../db/mo
 const multer = require("multer");
 const cors = require("cors");
 const session = require("express-session");
+const MongoStore = require("connect-mongo");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const bcrypt = require('bcryptjs');
@@ -32,6 +33,10 @@ app.use(session({
     secret: process.env.PRIVATE_KEY,
     resave: false,
     saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGO_URI,
+        ttl: 24 * 60 * 60
+    }),
     cookie: {
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
