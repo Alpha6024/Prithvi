@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Bot, User, Loader } from 'lucide-react';
+import { authFetch } from '../auth';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -24,10 +25,8 @@ export default function BotPage() {
         setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
         setLoading(true);
         try {
-            const res = await fetch(`${API}/ai/chat`, {
+            const res = await authFetch(`${API}/ai/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify({ message: userMessage })
             });
             const data = await res.json();

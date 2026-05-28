@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Phone, Camera, ArrowRight, Lock, Eye, EyeOff } from 'lucide-react';
+import { authFetch } from '../auth';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -26,9 +27,7 @@ export default function Newacc() {
     const [passwordError, setPasswordError] = useState('');
 
     useEffect(() => {
-        fetch(`${API}/auth/user`, {
-            credentials: 'include'
-        })
+        authFetch(`${API}/auth/user`)
         .then(res => res.json())
         .then(data => {
             if (data.success) {
@@ -77,9 +76,8 @@ export default function Newacc() {
         formData.append('file', file);
 
         try {
-            const response = await fetch(`${API}/api/upload/avatar`, {
+            const response = await authFetch(`${API}/api/upload/avatar`, {
                 method: 'POST',
-                credentials: 'include',
                 body: formData
             });
 
@@ -124,12 +122,8 @@ export default function Newacc() {
                 avatarUrl = await uploadToImageKit(imageFile);
             }
 
-            const response = await fetch(`${API}/api/user/complete-profile`, {
+            const response = await authFetch(`${API}/api/user/complete-profile`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
                 body: JSON.stringify({
                     name: formData.name,
                     username: formData.username,

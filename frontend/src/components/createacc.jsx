@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, Phone, ArrowRight, Camera } from 'lucide-react';
+import { setToken } from '../auth';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -38,9 +39,9 @@ export default function CreateAcc() {
             if (form.mob) formData.append('mob', form.mob);
             if (avatar) formData.append('avatar', avatar);
 
-            const res = await fetch(`${API}/user/signup`, { method: 'POST', credentials: 'include', body: formData });
+            const res = await fetch(`${API}/user/signup`, { method: 'POST', body: formData });
             const data = await res.json();
-            if (data.success) navigate('/acc/home');
+            if (data.success) { setToken(data.token); navigate('/acc/home'); }
             else setError(data.message || 'Something went wrong');
         } catch {
             setError('Server error, please try again');

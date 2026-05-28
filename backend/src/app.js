@@ -3,15 +3,11 @@ const express = require("express");
 const { usermodel, postmodel, campaignmodel, donationmodel } = require("../db/model");
 const multer = require("multer");
 const cors = require("cors");
-const session = require("express-session");
-const MongoStore = require("connect-mongo");
-const passport = require("passport");
-const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require("dotenv").config();
 
-const upload=multer({storage:multer.memoryStorage()})
-
+const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
 const allowedOrigins = [
@@ -29,61 +25,27 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.use(session({
-    secret: process.env.PRIVATE_KEY,
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: process.env.MONGO_URI,
-        ttl: 24 * 60 * 60
-    }),
-    cookie: {
-        maxAge: 24 * 60 * 60 * 1000,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+// ── JWT helpers ───────────────────────────────────────────────────────────────
+const JWT_SECRET = process.env.PRIVATE_KEY || 'prithvi_secret';
+
+const signToken = (user) => jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+
+const authMiddleware = async (req, res, next) => {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
     }
-}));
-
-app.use(passport.initialize());
-app.use(passport.session());
-
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL}/auth/google/callback`
-}, async (accessToken, refreshToken, profile, done) => {
     try {
-        let user = await usermodel.findOne({ googleId: profile.id });
-
-        if (!user) {
-            user = await usermodel.create({
-                googleId: profile.id,
-                email: profile.emails[0].value,
-                name: profile.displayName,
-                avatar: profile.photos[0]?.value,
-                isNewUser: true
-            });
-        }
-
-        return done(null, user);
-    } catch (error) {
-        return done(error, null);
+        const decoded = jwt.verify(auth.split(' ')[1], JWT_SECRET);
+        const user = await usermodel.findById(decoded.id);
+        if (!user) return res.status(401).json({ success: false, message: 'User not found' });
+        req.user = user;
+        next();
+    } catch {
+        return res.status(401).json({ success: false, message: 'Invalid token' });
     }
-}));
-
-passport.serializeUser((user, done) => {
-    done(null, user._id);
-});
-
-passport.deserializeUser(async (id, done) => {
-    try {
-        const user = await usermodel.findById(id);
-        done(null, user);
-    } catch (error) {
-        done(error, null);
-    }
-});
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Monthly leaderboard (resets every month)
 app.get("/leaderboard/monthly", async (req, res) => {
@@ -126,51 +88,65 @@ app.get("/leaderboard/alltime", async (req, res) => {
     }
 });
 
-app.get('/auth/google', passport.authenticate('google', { 
-    scope: ['profile', 'email'] 
-}));
+app.get('/auth/google', (req, res) => {
+    res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.BASE_URL}/auth/google/callback&response_type=code&scope=profile email`);
+});
 
-app.get('/auth/google/callback', 
-    passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL}/acc` }),
-    (req, res) => {
-        const redirectUrl = req.user.isNewUser
-            ? `${process.env.FRONTEND_URL}/newacc`
-            : `${process.env.FRONTEND_URL}/acc/home`;
-        res.redirect(redirectUrl);
-    }
-);
+app.get('/auth/google/callback', async (req, res) => {
+    // Google OAuth is now handled by Supabase on the frontend
+    res.redirect(`${process.env.FRONTEND_URL}/acc`);
+});
 
-app.get('/auth/user', (req, res) => {
-    if (req.isAuthenticated()) {
-        res.json({
-            success: true,
-            user: req.user
-        });
-    } else {
-        res.json({
-            success: false,
-            message: 'Not authenticated'
-        });
-    }
+app.get('/auth/user', authMiddleware, (req, res) => {
+    res.json({ success: true, user: req.user });
 });
 
 app.post('/auth/logout', (req, res) => {
-    req.logout((err) => {
-        if (err) {
-            return res.json({ success: false, message: 'Logout failed' });
-        }
-        res.json({ success: true, message: 'Logged out successfully' });
-    });
+    res.json({ success: true, message: 'Logged out' });
 });
 
-app.post('/api/upload/avatar', upload.single('file'), async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ 
-            success: false, 
-            message: 'Not authenticated' 
-        });
-    }
+// Supabase session sync — verifies JWT and creates backend JWT
+app.post('/auth/supabase-session', async (req, res) => {
+    try {
+        const { access_token } = req.body;
+        if (!access_token) return res.status(400).json({ success: false, message: 'No token provided' });
 
+        const supabaseRes = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, {
+            headers: {
+                Authorization: `Bearer ${access_token}`,
+                apikey: process.env.SUPABASE_ANON_KEY
+            }
+        });
+
+        const supabaseUser = await supabaseRes.json();
+        if (!supabaseUser.id) return res.status(401).json({ success: false, message: 'Invalid token' });
+
+        let user = await usermodel.findOne({
+            $or: [{ supabase_uid: supabaseUser.id }, { email: supabaseUser.email }]
+        });
+
+        let isNewUser = false;
+        if (!user) {
+            user = await usermodel.create({
+                supabase_uid: supabaseUser.id,
+                email: supabaseUser.email,
+                name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name || '',
+                avatar: supabaseUser.user_metadata?.avatar_url || null,
+                isNewUser: true
+            });
+            isNewUser = true;
+        } else if (!user.supabase_uid) {
+            await usermodel.findByIdAndUpdate(user._id, { supabase_uid: supabaseUser.id });
+        }
+
+        const token = signToken(user);
+        res.json({ success: true, token, isNewUser: user.isNewUser || isNewUser, user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+app.post('/api/upload/avatar', authMiddleware, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ 
@@ -195,14 +171,7 @@ app.post('/api/upload/avatar', upload.single('file'), async (req, res) => {
 });
 
 
-app.put('/api/user/complete-profile', async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ 
-            success: false, 
-            message: 'Not authenticated' 
-        });
-    }
-
+app.put('/api/user/complete-profile', authMiddleware, async (req, res) => {
     try {
         const { username, mobile, name, avatar, password } = req.body;
 
@@ -275,11 +244,7 @@ app.post("/user/create", async (req, res) => {
     }
 });
 
-app.post("/post/create", upload.fields([{ name: "image", maxCount: 1 }, { name: "video", maxCount: 1 }]), async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ success: false, message: "Not authenticated" });
-    }
-
+app.post("/post/create", authMiddleware, upload.fields([{ name: "image", maxCount: 1 }, { name: "video", maxCount: 1 }]), async (req, res) => {
     try {
         const { likes, featured, description } = req.body; // ← add description
 
@@ -318,10 +283,7 @@ app.post("/post/create", upload.fields([{ name: "image", maxCount: 1 }, { name: 
     }
 });
 
-app.get("/post/myposts", async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ success: false, message: "Not authenticated" });
-    }
+app.get("/post/myposts", authMiddleware, async (req, res) => {
     try {
         const posts = await postmodel.find({ userId: req.user._id });
         res.status(200).json({ success: true, posts });
@@ -343,10 +305,7 @@ app.get("/post/view", async (req, res) => {
     }
 });
 
-app.put("/post/like/:postId", async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ success: false, message: "Not authenticated" });
-    }
+app.put("/post/like/:postId", authMiddleware, async (req, res) => {
     try {
         const post = await postmodel.findById(req.params.postId);
         if (!post) return res.status(404).json({ success: false, message: "Post not found" });
@@ -376,19 +335,12 @@ app.post("/user/signup", upload.single('avatar'), async (req, res) => {
     try {
         const { name, email, username, password, mob } = req.body;
 
-        // Check if email already exists
         const existingEmail = await usermodel.findOne({ email });
-        if (existingEmail) {
-            return res.status(400).json({ success: false, message: "Email already registered" });
-        }
+        if (existingEmail) return res.status(400).json({ success: false, message: "Email already registered" });
 
-        // Check if username already exists
         const existingUsername = await usermodel.findOne({ username });
-        if (existingUsername) {
-            return res.status(400).json({ success: false, message: "Username already taken" });
-        }
+        if (existingUsername) return res.status(400).json({ success: false, message: "Username already taken" });
 
-        // Upload avatar if provided
         let avatarUrl = null;
         if (req.file) {
             const result = await uploadbuffer(req.file.buffer);
@@ -398,22 +350,15 @@ app.post("/user/signup", upload.single('avatar'), async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = await usermodel.create({
-            name,
-            email,
-            username,
+            name, email, username,
             password: hashedPassword,
             mob: mob || null,
             avatar: avatarUrl,
             isNewUser: false
         });
 
-        // Auto login after signup
-        req.login(newUser, (err) => {
-            if (err) {
-                return res.status(500).json({ success: false, message: "Login after signup failed" });
-            }
-            res.status(201).json({ success: true, message: "Account created successfully", user: newUser });
-        });
+        const token = signToken(newUser);
+        res.status(201).json({ success: true, message: "Account created successfully", token, user: newUser });
 
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
@@ -428,33 +373,21 @@ app.post("/user/login", async (req, res) => {
         }
 
         const user = await usermodel.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ success: false, message: "Invalid username or password" });
-        }
-
-        if (!user.password) {
-            return res.status(401).json({ success: false, message: "This account uses Google login" });
-        }
+        if (!user) return res.status(401).json({ success: false, message: "Invalid username or password" });
+        if (!user.password) return res.status(401).json({ success: false, message: "This account uses Google login" });
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ success: false, message: "Invalid username or password" });
-        }
+        if (!isMatch) return res.status(401).json({ success: false, message: "Invalid username or password" });
 
-        req.login(user, (err) => {
-            if (err) {
-                return res.status(500).json({ success: false, message: "Login failed" });
-            }
-            res.json({ success: true, user });
-        });
+        const token = signToken(user);
+        res.json({ success: true, token, user });
 
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 // Create campaign
-app.post("/campaign/create", upload.single('image'), async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false, message: "Not authenticated" });
+app.post("/campaign/create", authMiddleware, upload.single('image'), async (req, res) => {
     try {
         const { title, description, contributionTypes, peopleNeeded } = req.body;
         let imageUrl = null;
@@ -490,8 +423,7 @@ app.get("/campaign/all", async (req, res) => {
 });
 
 // Update campaign (progress, description etc.)
-app.put("/campaign/update/:id", upload.single('image'), async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false, message: "Not authenticated" });
+app.put("/campaign/update/:id", authMiddleware, upload.single('image'), async (req, res) => {
     try {
         const campaign = await campaignmodel.findById(req.params.id);
         if (!campaign) return res.status(404).json({ success: false, message: "Campaign not found" });
@@ -524,8 +456,7 @@ app.put("/campaign/update/:id", upload.single('image'), async (req, res) => {
 });
 
 // Join request
-app.post("/campaign/join/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false, message: "Not authenticated" });
+app.post("/campaign/join/:id", authMiddleware, async (req, res) => {
     try {
         const campaign = await campaignmodel.findById(req.params.id);
         if (!campaign) return res.status(404).json({ success: false, message: "Campaign not found" });
@@ -548,8 +479,7 @@ app.post("/campaign/join/:id", async (req, res) => {
 
 // Donate to campaign (update amount after Razorpay success)
 // Donate to campaign — 94% to campaign, 6% to pool
-app.put("/campaign/donate/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false, message: "Not authenticated" });
+app.put("/campaign/donate/:id", authMiddleware, async (req, res) => {
     try {
         const { amount } = req.body;
 
@@ -603,8 +533,7 @@ app.put("/campaign/donate/:id", async (req, res) => {
 });
 
 // Get join requests for a campaign
-app.get("/campaign/requests/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+app.get("/campaign/requests/:id", authMiddleware, async (req, res) => {
     try {
         const campaign = await campaignmodel.findById(req.params.id)
             .populate('joinRequests.userId', 'name username avatar');
@@ -618,8 +547,7 @@ app.get("/campaign/requests/:id", async (req, res) => {
 });
 
 // Accept or reject join request
-app.put("/campaign/request/:campaignId/:userId", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+app.put("/campaign/request/:campaignId/:userId", authMiddleware, async (req, res) => {
     try {
         const { action } = req.body; // 'accepted' or 'rejected'
         const campaign = await campaignmodel.findById(req.params.campaignId);
@@ -660,8 +588,7 @@ app.put("/campaign/request/:campaignId/:userId", async (req, res) => {
 });
 
 // Get notifications for logged in user
-app.get("/user/notifications", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+app.get("/user/notifications", authMiddleware, async (req, res) => {
     try {
         const user = await usermodel.findById(req.user._id).select('notifications');
         res.json({ success: true, notifications: user.notifications.reverse() });
@@ -671,8 +598,7 @@ app.get("/user/notifications", async (req, res) => {
 });
 
 // Mark notifications as read
-app.put("/user/notifications/read", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+app.put("/user/notifications/read", authMiddleware, async (req, res) => {
     try {
         await usermodel.updateOne(
             { _id: req.user._id },
@@ -718,11 +644,7 @@ app.get("/leaderboard", async (req, res) => {
     }
 });
 
-app.post("/ai/chat", async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ success: false, message: "Not authenticated" });
-    }
-
+app.post("/ai/chat", authMiddleware, async (req, res) => {
     try {
         const { message } = req.body;
 
@@ -904,8 +826,7 @@ app.get("/donation/transactions", async (req, res) => {
 
 // ── POST /donation/verify ──────────────────
 // Called after Razorpay payment success — verifies & records donation
-app.post("/donation/verify", async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+app.post("/donation/verify", authMiddleware, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, amount } = req.body;
 
@@ -938,8 +859,7 @@ app.post("/donation/verify", async (req, res) => {
 
 // ── POST /donation/allocate ────────────────
 // ADMIN ONLY: Allocate pool money to a platform campaign
-app.post("/donation/allocate", async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+app.post("/donation/allocate", authMiddleware, async (req, res) => {
   // Add your admin check here, e.g.: if (!req.user.isAdmin) return res.status(403)...
   try {
     const { campaignId, amount } = req.body;
@@ -966,8 +886,7 @@ app.post("/donation/allocate", async (req, res) => {
 
 // ── POST /donation/reward-leaderboard ──────
 // ADMIN ONLY: Reward a top leaderboard user (funds go to their campaign)
-app.post("/donation/reward-leaderboard", async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+app.post("/donation/reward-leaderboard", authMiddleware, async (req, res) => {
   // Add admin check here
   try {
     const { userId, amount } = req.body;
@@ -995,8 +914,7 @@ app.post("/donation/reward-leaderboard", async (req, res) => {
 });
 
 // Submit feedback for a completed campaign
-app.post("/campaign/feedback/:campaignId", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+app.post("/campaign/feedback/:campaignId", authMiddleware, async (req, res) => {
     try {
         const { rating, comment } = req.body;
         const campaign = await campaignmodel.findById(req.params.campaignId);
@@ -1372,14 +1290,11 @@ app.post("/user/login", async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ success: false, message: "Invalid username or password" });
 
-        // Capture IP
         const userIP = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
         await usermodel.findByIdAndUpdate(user._id, { lastIP: userIP });
 
-        req.login(user, (err) => {
-            if (err) return res.status(500).json({ success: false, message: "Login failed" });
-            res.json({ success: true, user });
-        });
+        const token = signToken(user);
+        res.json({ success: true, token, user });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -1411,13 +1326,11 @@ app.post("/user/signup", upload.single('avatar'), async (req, res) => {
             mob: mob || null,
             avatar: avatarUrl,
             isNewUser: false,
-            lastIP: userIP  // capture IP at signup
+            lastIP: userIP
         });
 
-        req.login(newUser, (err) => {
-            if (err) return res.status(500).json({ success: false, message: "Login after signup failed" });
-            res.status(201).json({ success: true, message: "Account created successfully", user: newUser });
-        });
+        const token = signToken(newUser);
+        res.status(201).json({ success: true, message: "Account created successfully", token, user: newUser });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
     }
@@ -1475,13 +1388,12 @@ app.put("/admin/campaign/flag/:id", async (req, res) => {
     }
 });
 
-// Supabase session sync — verifies JWT and creates backend session
+// Supabase session sync — verifies Supabase JWT and returns backend JWT
 app.post('/auth/supabase-session', async (req, res) => {
     try {
         const { access_token } = req.body;
         if (!access_token) return res.status(400).json({ success: false, message: 'No token provided' });
 
-        // Verify token with Supabase
         const supabaseRes = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, {
             headers: {
                 Authorization: `Bearer ${access_token}`,
@@ -1492,7 +1404,6 @@ app.post('/auth/supabase-session', async (req, res) => {
         const supabaseUser = await supabaseRes.json();
         if (!supabaseUser.id) return res.status(401).json({ success: false, message: 'Invalid token' });
 
-        // Find or create user in MongoDB
         let user = await usermodel.findOne({
             $or: [{ supabase_uid: supabaseUser.id }, { email: supabaseUser.email }]
         });
@@ -1511,17 +1422,13 @@ app.post('/auth/supabase-session', async (req, res) => {
             await usermodel.findByIdAndUpdate(user._id, { supabase_uid: supabaseUser.id });
         }
 
-        req.login(user, (err) => {
-            if (err) return res.status(500).json({ success: false, message: 'Session creation failed' });
-            res.json({ success: true, isNewUser: user.isNewUser || isNewUser, user });
-        });
+        const token = signToken(user);
+        res.json({ success: true, token, isNewUser: user.isNewUser || isNewUser, user });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
 const paymentRoutes = require("./routes/payment");
-
 app.use("/payment", paymentRoutes);
-
 module.exports = app;

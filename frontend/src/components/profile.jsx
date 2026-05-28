@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Home, Target, Trophy, ArrowLeft, LogOut, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch, removeToken } from '../auth';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -27,7 +28,7 @@ export default function Profile() {
 
     const fetchUserData = async () => {
         try {
-            const res = await fetch(`${API}/auth/user`, { credentials: 'include' });
+            const res = await authFetch(`${API}/auth/user`);
             const data = await res.json();
             if (data.success) setUserData(data.user);
             else navigate('/acc');
@@ -36,14 +37,15 @@ export default function Profile() {
 
     const handleLogout = async () => {
         try {
-            await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
+            await authFetch(`${API}/auth/logout`, { method: 'POST' });
+            removeToken();
             navigate('/acc');
         } catch { console.error('Logout failed'); }
     };
 
     const fetchUserPosts = async () => {
         try {
-            const res = await fetch(`${API}/post/myposts`, { credentials: 'include' });
+            const res = await authFetch(`${API}/post/myposts`);
             const data = await res.json();
             if (data.success) setUserPosts(data.posts);
         } catch { console.error('Error fetching posts'); }

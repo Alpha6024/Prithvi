@@ -1,6 +1,7 @@
 import { ArrowLeft, Camera, CheckCircle, X, Image, Video } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch, isGuest } from '../auth';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -8,6 +9,10 @@ export default function CreatePost() {
     const navigate = useNavigate();
     const fileRef = useRef(null);
     const videoRef = useRef(null);
+
+    useEffect(() => {
+        if (isGuest()) navigate('/acc');
+    }, []);
 
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
@@ -40,7 +45,7 @@ export default function CreatePost() {
             if (videoFile) formData.append('video', videoFile);
             if (description) formData.append('description', description);
 
-            const res = await fetch(`${API}/post/create`, { method: 'POST', credentials: 'include', body: formData });
+            const res = await authFetch(`${API}/post/create`, { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) navigate('/acc/home');
             else setError(data.message || 'Failed to create post');

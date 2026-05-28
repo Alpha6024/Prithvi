@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Star } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { authFetch } from '../auth';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -20,7 +21,7 @@ export default function Feedback() {
 
     const fetchCampaign = async () => {
         try {
-            const res = await fetch(`${API}/campaign/all`, { credentials: 'include' });
+            const res = await authFetch(`${API}/campaign/all`);
             const data = await res.json();
             if (data.success) setCampaign(data.campaigns.find(c => c._id === campaignId));
         } catch (err) { console.error(err); }
@@ -28,7 +29,7 @@ export default function Feedback() {
 
     const fetchFeedbacks = async () => {
         try {
-            const res = await fetch(`${API}/campaign/feedback/${campaignId}`, { credentials: 'include' });
+            const res = await authFetch(`${API}/campaign/feedback/${campaignId}`);
             const data = await res.json();
             if (data.success) setExistingFeedbacks(data.feedbacks);
         } catch (err) { console.error(err); }
@@ -39,10 +40,8 @@ export default function Feedback() {
         if (!comment.trim()) return setMsg('Please write a comment');
         setSubmitting(true);
         try {
-            const res = await fetch(`${API}/campaign/feedback/${campaignId}`, {
+            const res = await authFetch(`${API}/campaign/feedback/${campaignId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify({ rating, comment })
             });
             const data = await res.json();

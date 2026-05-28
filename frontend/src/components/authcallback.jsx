@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { setToken, removeGuest } from '../auth';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -10,23 +11,17 @@ export default function AuthCallback() {
     useEffect(() => {
         const handleCallback = async () => {
             const { data, error } = await supabase.auth.getSession();
-
-            if (error || !data.session) {
-                navigate('/acc');
-                return;
-            }
+            if (error || !data.session) { navigate('/acc'); return; }
 
             try {
                 const res = await fetch(`${API}/auth/supabase-session`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
                     body: JSON.stringify({ access_token: data.session.access_token })
                 });
-
                 const result = await res.json();
-
                 if (result.success) {
+                    setToken(result.token);
                     navigate(result.isNewUser ? '/newacc' : '/acc/home');
                 } else {
                     navigate('/acc');
@@ -35,7 +30,6 @@ export default function AuthCallback() {
                 navigate('/acc');
             }
         };
-
         handleCallback();
     }, [navigate]);
 

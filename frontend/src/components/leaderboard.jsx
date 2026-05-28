@@ -1,6 +1,7 @@
 import { Plus, Home, Target, Trophy, User, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { authFetch } from '../auth';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -16,7 +17,7 @@ export default function Leaderboard() {
 
     const fetchCurrentUser = async () => {
         try {
-            const res = await fetch(`${API}/auth/user`, { credentials: 'include' });
+            const res = await authFetch(`${API}/auth/user`);
             const data = await res.json();
             if (data.success) setCurrentUser(data.user);
         } catch (err) { console.error(err); }
@@ -26,7 +27,7 @@ export default function Leaderboard() {
         setLoading(true);
         try {
             const url = tab === 'monthly' ? `${API}/leaderboard/monthly` : `${API}/leaderboard/alltime`;
-            const res = await fetch(url, { credentials: 'include' });
+            const res = await authFetch(url);
             const data = await res.json();
             if (data.success) setRankings(data.rankings);
             else setRankings([]);

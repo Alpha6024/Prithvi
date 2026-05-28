@@ -1,9 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import {
-  createBrowserRouter,
-  RouterProvider,
-} from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
 import './index.css'
 import Start from "./components/start"
@@ -20,63 +17,50 @@ import Fund from "./components/fund";
 import Feedback from "./components/feedback";
 import Admin from "./components/admin";
 import AuthCallback from "./components/authcallback";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const router = createBrowserRouter([
+  { path: "/", element: <Start /> },
+  { path: "/acc", element: <Acc /> },
+  { path: "/createacc", element: <CreateAcc /> },
+  { path: "/auth/callback", element: <AuthCallback /> },
   {
-    path: "/",
-    element: <Start />,
+    path: "/newacc",
+    element: <ProtectedRoute><Newacc /></ProtectedRoute>
   },
   {
-    path:"/createacc",
-    element:<CreateAcc/>
+    path: "/acc/home",
+    element: <ProtectedRoute><Home /></ProtectedRoute>
   },
   {
-    path:"/acc",
-    element:<Acc/>,
+    path: "/acc/home/post",
+    element: <ProtectedRoute><Post /></ProtectedRoute>
   },
   {
-    path:"/newacc",
-    element:<Newacc/>,
+    path: "/acc/home/campaign",
+    element: <ProtectedRoute><Campaign /></ProtectedRoute>
   },
   {
-    path:"/acc/home",
-    element:<Home/>,
+    path: "/acc/home/leaderboard",
+    element: <ProtectedRoute><Leaderboard /></ProtectedRoute>
   },
   {
-    path:"/acc/home/post",
-    element:<Post/>,
+    path: "/acc/home/profile",
+    element: <ProtectedRoute><Profile /></ProtectedRoute>
   },
   {
-    path:"/acc/home/campaign",
-    element:<Campaign/>,
+    path: "/acc/bot",
+    element: <ProtectedRoute><Bot /></ProtectedRoute>
   },
   {
-    path:"/acc/home/leaderboard",
-    element:<Leaderboard/>,
+    path: "/acc/home/fund",
+    element: <ProtectedRoute><Fund /></ProtectedRoute>
   },
   {
-    path:"/acc/home/profile",
-    element:<Profile/>
+    path: "/acc/campaign/feedback/:campaignId",
+    element: <ProtectedRoute><Feedback /></ProtectedRoute>
   },
-  {
-    path:"/acc/bot",
-    element:<Bot/>
-  },
-  {
-    path:"/acc/home/fund",
-    element:<Fund/>
-  },
-  {
-    path:"/acc/campaign/feedback/:campaignId",
-    element:<Feedback/>
-},{
-path:"/admin",
-element:<Admin/>
-},
-{
-path:"/auth/callback",
-element:<AuthCallback/>
-}
+  { path: "/admin", element: <Admin /> }
 ]);
 
 createRoot(document.getElementById("root")).render(

@@ -1,12 +1,16 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import { authFetch, isGuest } from "../auth";
+import GuestBanner from "./GuestBanner";
+import { useGuestGuard } from "../hooks/useGuestGuard";
 
 const API = import.meta.env.VITE_API_URL;
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
 
 export default function Fund() {
   const navigate = useNavigate();
+  const { guard, GuestPrompt } = useGuestGuard();
   const [amount, setAmount] = useState("");
   const [campaigns, setCampaigns] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -37,7 +41,7 @@ useEffect(() => {
 
   async function fetchCampaigns() {
     try {
-      const res = await fetch(`${API}/campaign/all`, { credentials: "include" });
+      const res = await authFetch(`${API}/campaign/all`);
       const data = await res.json();
       if (data.success) setCampaigns(data.campaigns);
     } catch (err) { console.error(err); }
@@ -48,7 +52,7 @@ useEffect(() => {
       const url = leaderboardTab === "monthly"
         ? `${API}/leaderboard/monthly`
         : `${API}/leaderboard/alltime`;
-      const res = await fetch(url, { credentials: "include" });
+      const res = await authFetch(url);
       const data = await res.json();
       if (data.success) setLeaderboard(data.rankings.slice(0, 3));
     } catch (err) { console.error(err); }
@@ -56,7 +60,7 @@ useEffect(() => {
 
   async function fetchTransactions() {
     try {
-      const res = await fetch(`${API}/donation/transactions`, { credentials: "include" });
+      const res = await authFetch(`${API}/donation/transactions`);
       const data = await res.json();
       if (data.success) setTransactions(data.transactions);
     } catch (err) { console.error(err); }
@@ -101,10 +105,8 @@ useEffect(() => {
         description: "Community Donation Pool",
         order_id: order.id,
         handler: async function (response) {
-          const verifyRes = await fetch(`${API}/donation/verify`, {
+          const verifyRes = await authFetch(`${API}/donation/verify`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
             body: JSON.stringify({
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
@@ -167,6 +169,8 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-950 via-emerald-900 to-teal-900 text-white font-sans">
+      <GuestPrompt />
+      <GuestBanner />
 
       {/* Back Button */}
       <div className="sticky top-0 z-10 bg-green-950 bg-opacity-80 backdrop-blur-sm border-b border-emerald-800 px-4 py-3 flex items-center gap-3">
@@ -243,7 +247,7 @@ useEffect(() => {
               </p>
             )}
             <button
-              onClick={handleDonate}
+              onClick={() => guard(handleDonate)}
               disabled={loading}
               className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition"
             >

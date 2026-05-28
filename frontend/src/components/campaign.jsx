@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Home, Target, Trophy, User, ArrowLeft, Users, TrendingUp, X, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch, isGuest } from '../auth';
+import GuestBanner from './GuestBanner';
+import { useGuestGuard } from '../hooks/useGuestGuard';
 
 const API = import.meta.env.VITE_API_URL;
 
 export default function Campaign() {
     const navigate = useNavigate();
+    const { guard, GuestPrompt } = useGuestGuard();
     const fileRef = useRef(null);
 
     const [campaigns, setCampaigns] = useState([]);
@@ -47,8 +51,9 @@ export default function Campaign() {
     }, []);
 
     const fetchCurrentUser = async () => {
+        if (isGuest()) return;
         try {
-            const res = await fetch(`${API}/auth/user`, { credentials: 'include' });
+            const res = await authFetch(`${API}/auth/user`);
             const data = await res.json();
             if (data.success) setCurrentUser(data.user);
         } catch (err) { console.error(err); }
@@ -56,7 +61,7 @@ export default function Campaign() {
 
     const fetchCampaigns = async () => {
         try {
-            const res = await fetch(`${API}/campaign/all`, { credentials: 'include' });
+            const res = await authFetch(`${API}/campaign/all`);
             const data = await res.json();
             if (data.success) setCampaigns(data.campaigns);
         } catch (err) { console.error(err); }
@@ -65,7 +70,7 @@ export default function Campaign() {
 
     const fetchNotifications = async () => {
         try {
-            const res = await fetch(`${API}/user/notifications`, { credentials: 'include' });
+            const res = await authFetch(`${API}/user/notifications`);
             const data = await res.json();
             if (data.success) setNotifications(data.notifications);
         } catch (err) { console.error(err); }
@@ -74,17 +79,14 @@ export default function Campaign() {
     const openNotifications = async () => {
         await fetchNotifications();
         setShowNotifications(true);
-        await fetch(`${API}/user/notifications/read`, {
-            method: 'PUT',
-            credentials: 'include'
-        });
+        await authFetch(`${API}/user/notifications/read`, { method: 'PUT' });
     };
 
     const fetchRequests = async (campaign) => {
         setRequestsModal(campaign);
         setRequestsLoading(true);
         try {
-            const res = await fetch(`${API}/campaign/requests/${campaign._id}`, { credentials: 'include' });
+            const res = await authFetch(`${API}/campaign/requests/${campaign._id}`);
             const data = await res.json();
             if (data.success) setRequests(data.requests);
         } catch (err) { console.error(err); }
@@ -93,10 +95,8 @@ export default function Campaign() {
 
     const handleRequestAction = async (campaignId, userId, action) => {
         try {
-            const res = await fetch(`${API}/campaign/request/${campaignId}/${userId}`, {
+            const res = await authFetch(`${API}/campaign/request/${campaignId}/${userId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify({ action })
             });
             const data = await res.json();
@@ -165,7 +165,7 @@ export default function Campaign() {
                 : `${API}/campaign/create`;
             const method = editingCampaign ? 'PUT' : 'POST';
 
-            const res = await fetch(url, { method, credentials: 'include', body: formData });
+            const res = await authFetch(url, { method, body: formData });
             const data = await res.json();
             if (data.success) {
                 fetchCampaigns();
@@ -182,10 +182,7 @@ export default function Campaign() {
 
     const handleJoin = async (campaignId) => {
         try {
-            const res = await fetch(`${API}/campaign/join/${campaignId}`, {
-                method: 'POST',
-                credentials: 'include'
-            });
+            const res = await authFetch(`${API}/campaign/join/${campaignId}`, { method: 'POST' });
             const data = await res.json();
             alert(data.message);
             fetchCampaigns();
@@ -218,10 +215,8 @@ export default function Campaign() {
             description: `₹${campaignAmount} to campaign • ₹${poolCut} to platform pool`,
             order_id: order.id,
             handler: async function () {
-                const result = await fetch(`${API}/campaign/donate/${campaignId}`, {
+                const result = await authFetch(`${API}/campaign/donate/${campaignId}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
                     body: JSON.stringify({ amount })
                 });
                 const data = await result.json();
@@ -280,6 +275,8 @@ export default function Campaign() {
 
     return (
         <div className="max-w-md mx-auto bg-white min-h-screen pb-20">
+            <GuestPrompt />
+            <GuestBanner />
 
             {/* Header */}
             <div className="sticky top-0 bg-white z-10 border-b border-gray-200">
@@ -289,7 +286,7 @@ export default function Campaign() {
                     </button>
                     <h1 className="text-base font-semibold">Campaigns</h1>
                     <div className="flex items-center gap-2">
-                        <button onClick={openNotifications} className="relative">
+                        <button onClick={() => !isGuest() && openNotifications()} className="relative">
                             <span className="text-xl">🔔</span>
                             {notifications.filter(n => !n.read).length > 0 && (
                                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
@@ -298,7 +295,7 @@ export default function Campaign() {
                             )}
                         </button>
                         <button
-                            onClick={() => { resetForm(); setShowForm(true); }}
+                            onClick={() => guard(() => { resetForm(); setShowForm(true); })}
                             className="bg-green-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1"
                         >
                             <Plus className="w-4 h-4" /> Create
@@ -651,7 +648,7 @@ export default function Campaign() {
                                             );
                                             return (
                                                 <button
-                                                    onClick={() => handleJoin(campaign._id)}
+                                                    onClick={() => guard(() => handleJoin(campaign._id))}
                                                     className="w-full bg-green-500 text-white font-semibold py-2.5 rounded-xl text-sm hover:bg-green-600 transition-colors"
                                                 >
                                                     Join Campaign
@@ -668,7 +665,7 @@ export default function Campaign() {
                                                 className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                                             />
                                             <button
-                                                onClick={() => payNow(campaign._id)}
+                                                onClick={() => guard(() => payNow(campaign._id))}
                                                 className="bg-blue-500 text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:bg-blue-600 transition-colors"
                                             >
                                                 Donate ❤️
