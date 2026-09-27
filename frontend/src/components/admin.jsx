@@ -281,7 +281,7 @@ export default function Admin() {
     return (
         <div className="min-h-screen bg-gray-950 text-white">
             <div className="sticky top-0 bg-gray-900 border-b border-gray-800 z-10">
-                <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
+                <div className="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
                             <span className="text-sm font-black">P</span>
@@ -294,10 +294,10 @@ export default function Admin() {
                 </div>
             </div>
 
-            <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
                 {/* Stat Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
                         <div className="flex items-center gap-3 mb-2">
                             <Users className="w-5 h-5 text-blue-400" />
@@ -445,18 +445,18 @@ export default function Admin() {
                                             <span>⭐ {(c.feedbacks.reduce((s, f) => s + f.rating, 0) / c.feedbacks.length).toFixed(1)}/5</span>
                                         )}
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-col sm:flex-row gap-2">
                                         <input
                                             type="number"
                                             placeholder="Amount ₹"
                                             value={allocAmount[c._id] || ""}
                                             onChange={e => setAllocAmount(prev => ({ ...prev, [c._id]: e.target.value }))}
-                                            className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-green-500"
+                                            className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-green-500 w-full"
                                         />
                                         <button
                                             onClick={() => handleAllocate(c._id, c.title)}
                                             disabled={allocating[c._id]}
-                                            className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-1 transition"
+                                            className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm flex items-center justify-center gap-1 transition w-full sm:w-auto"
                                         >
                                             <Send className="w-4 h-4" />
                                             {allocating[c._id] ? "Opening..." : "Pay & Send"}
@@ -539,7 +539,7 @@ export default function Admin() {
                 {tab === "scam" && (
                     <div>
                         {/* Summary bar */}
-                        <div className="grid grid-cols-3 gap-4 mb-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                             <div className="bg-red-950 border border-red-800 rounded-2xl p-4 text-center">
                                 <p className="text-3xl font-black text-red-400">{highRisk.length}</p>
                                 <p className="text-xs text-red-500 mt-1">🚨 High Risk</p>
@@ -676,7 +676,7 @@ export default function Admin() {
 )}
 
                                                 {/* Campaign stats */}
-                                                <div className="grid grid-cols-3 gap-3 mb-4">
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                                                     <div className="bg-gray-900 rounded-xl p-3 text-center">
                                                         <p className="text-lg font-black text-white">{c.progress}%</p>
                                                         <p className="text-xs text-gray-500">Progress</p>
