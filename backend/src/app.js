@@ -12,7 +12,6 @@ const app = express();
 
 const allowedOrigins = [
     'http://localhost:5173',
-    'https://prithvi-orcin.vercel.app',
     process.env.FRONTEND_URL
 ].filter(Boolean);
 
@@ -772,7 +771,7 @@ Do not reveal any sensitive information like passwords or emails.`;
                 "Authorization": `Bearer ${process.env.GrokAPI}`
             },
             body: JSON.stringify({
-                model: "llama-3.3-70b-versatile",
+                model: "openai/gpt-oss-120b",
                 max_tokens: 1024,
                 messages: [
                     { role: "system", content: systemPrompt },
@@ -1085,7 +1084,7 @@ app.get("/admin/scam-detection", async (req, res) => {
                         "Authorization": `Bearer ${process.env.GrokAPI}`
                     },
                     body: JSON.stringify({
-                        model: "llama-3.3-70b-versatile",
+                        model: "openai/gpt-oss-120b",
                         max_tokens: 100,
                         messages: [
                             {
